@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>World Sandbox</title>
+<style>
+body {
+  margin: 0;
+  background: #1a1a1a;
+  color: white;
+  font-family: Arial, sans-serif;
+  overflow: hidden;
+}
+
+#toolbar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 200px;
+  background: #111;
+  padding: 8px;
+  overflow-y: auto;
+}
+
+.tool {
+  background: #222;
+  border: 1px solid #333;
+  padding: 6px;
+  margin-bottom: 6px;
+  cursor: pointer;
+}
+
+.tool:hover {
+  background: #333;
+}
+
+canvas {
+  position: absolute;
+  left: 200px;
+  top: 0;
+}
+</style>
+</head>
+<body>
+
+<div id="toolbar"></div>
+<canvas id="game"></canvas>
+
+<script>
+/* ======================
+   CONSTANTS & TILES
+====================== */
+const TILE_SIZE = 8;
+const MAP_WIDTH = 160;
+const MAP_HEIGHT = 100;
+
+const TILES = {
+  grass: { color: "#3fa34d", walkable: true },
+  water: { color: "#2b6cb0", walkable: false }
+};
+
+/* ======================
+   MAP
+====================== */
+const map = [];
+for (let y = 0; y < MAP_HEIGHT; y++) {
+  map[y] = [];
+  for (let x = 0; x < MAP_WIDTH; x++) {
+    map[y][x] = Math.random() < 0.12 ? "water" : "grass";
+  }
+}
+
+/* ======================
+   ITEMS (100+)
+====================== */
+const ITEMS = [];
+const types = ["sword","axe","spear","bow","staff","dagger"];
+const mats = ["wood","stone","iron","steel","gold","mythril"];
+let id = 0;
+
+for (let t of types) {
+  for (let m of mats) {
+    ITEMS.push({
+      id: id++,
+      name: m + " " + t,
+      damage: Math.floor(Math.random()*6)+2
+    });
+  }
+}
+while (ITEMS.length < 100) {
+  const b = ITEMS[Math.floor(Math.random()*ITEMS.length)];
+  ITEMS.push({...b, id: id++});
+}
+
+/* ======================
+   KINGDOMS & HUMANS
+====================== */
+const kingdoms = [];
+const humans = [];
+
+function createKingdom() {
+  const k = {
+    color: `hsl(${Math.random()*360},60%,50%)`
+  };
+  kingdoms.push(k);
+  return k;
+}
+
+function spawnHuman(x, y) {
+  let k = kingdoms[0] || createKingdom();
+  humans.push({
+    x, y,
+    hp: 100,
+    kingdom: k,
+    item: ITEMS[Math.floor(Math.random()*ITEMS.length)]
+  });
+}
+
+/* ======================
+   UI
+====================== */
+const toolbar = document.getElementById("toolbar");
+let currentTool = "human";
+
+[
+  ["human","Spawn Human"],
+  ["water","Water"]
+].forEach(t => {
+  const d = document.createElement("div");
+  d.className = "tool";
+  d.textContent = t[1];
+  d.onclick = () => currentTool = t[0];
+  toolbar.appendChild(d);
+});
+
+/* ======================
+   CANVAS
+====================== */
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+canvas.width = window.innerWidth - 200;
+canvas.height = window.innerHeight;
+
+canvas.onclick = e => {
+  const x = Math.floor(e.offsetX / TILE_SIZE);
+  const y = Math.floor(e.offsetY / TILE_SIZE);
+  if (!map[y]) return;
+
+  if (currentTool === "human") spawnHuman(x,y);
+  if (currentTool === "water") map[y][x] = "water";
+};
+
+/* ======================
+   AI & COMBAT
+====================== */
+function update() {
+  humans.forEach(h => {
+    const dx = Math.floor(Math.random()*3)-1;
+    const dy = Math.floor(Math.random()*3)-1;
+    const nx = h.x + dx;
+    const ny = h.y + dy;
+    if (map[ny] && map[ny][nx] && TILES[map[ny][nx]].walkable) {
+      h.x = nx;
+      h.y = ny;
+    }
+  });
+
+  for (let i = 0; i < humans.length; i++) {
+    for (let j = i+1; j < humans.length; j++) {
+      const a = humans[i], b = humans[j];
+      if (a.kingdom !== b.kingdom &&
+          Math.abs(a.x-b.x)<=1 &&
+          Math.abs(a.y-b.y)<=1) {
+        a.hp -= b.item.damage;
+        b.hp -= a.item.damage;
+      }
+    }
+  }
+
+  for (let i = humans.length-1; i>=0; i--) {
+    if (humans[i].hp <= 0) humans.splice(i,1);
+  }
+}
+
+/* ======================
+   DRAW
+====================== */
+function drawHuman(h) {
+  const px = h.x*TILE_SIZE;
+  const py = h.y*TILE_SIZE;
+
+  ctx.fillStyle = "#f1c27d";
+  ctx.fillRect(px+3,py,2,2);
+
+  ctx.fillStyle = h.kingdom.color;
+  ctx.fillRect(px+3,py+2,2,3);
+
+  ctx.fillStyle = "#000";
+  ctx.fillRect(px+2,py+5,1,2);
+  ctx.fillRect(px+5,py+5,1,2);
+}
+
+function draw() {
+  for (let y=0;y<MAP_HEIGHT;y++) {
+    for (let x=0;x<MAP_WIDTH;x++) {
+      ctx.fillStyle = TILES[map[y][x]].color;
+      ctx.fillRect(x*TILE_SIZE,y*TILE_SIZE,TILE_SIZE,TILE_SIZE);
+    }
+  }
+  humans.forEach(drawHuman);
+}
+
+/* ======================
+   LOOP
+====================== */
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>
